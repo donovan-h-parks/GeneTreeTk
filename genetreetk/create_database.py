@@ -374,7 +374,7 @@ class CreateDatabase(object):
         type_strains_file : str
             File indicating type strains.
         genome_prot_dir : str
-            Directory containing  amino acid genes for each genome.
+            Directory containing amino acid genes for each genome.
         extension : str
             Extension of files with called genes.
         max_taxa : int

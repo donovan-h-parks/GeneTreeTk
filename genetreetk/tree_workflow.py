@@ -73,6 +73,11 @@ class TreeWorkflow():
           Directory to store results.
         """
         
+        num_seqs = sum([1 for _, _ in seq_io.read_seq(msa_file)])
+        if num_seqs <= 2:
+            self.logger.error('Insufficient number of sequences in MSA to infer tree.')
+            raise SystemExit('Tree inference failed.')
+        
         output_file = ntpath.basename(msa_file)
         prefix = output_file[0:output_file.rfind('.')]
         suffix = output_file[output_file.rfind('.') + 1:]

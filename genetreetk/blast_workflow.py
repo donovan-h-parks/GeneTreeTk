@@ -466,6 +466,21 @@ class BlastWorkflow():
         t2t_tree = os.path.join(output_dir, 'homologs.tax2tree.tree')
         cmd = 't2t decorate -m %s -t %s -o %s' % (output_taxonomy_file, tree_output, t2t_tree)
         os.system(cmd)
+        
+        # create tree with leaf nodes given as genome accessions
+        tree = dendropy.Tree.get_from_path(t2t_tree,
+                                            schema='newick',
+                                            rooting='force-rooted',
+                                            preserve_underscores=True)
+
+        for leaf in tree.leaf_node_iter():
+            leaf.taxon.label = leaf.taxon.label.split('~')[0]
+
+        genome_tree = os.path.join(output_dir, 'homologs.tax2tree.genome_accessions.tree')
+        tree.write_to_path(genome_tree,
+                            schema='newick',
+                            suppress_rooting=True,
+                            unquoted_underscores=True)
 
         # setup metadata for ARB file
         src_dir = os.path.dirname(os.path.realpath(__file__))

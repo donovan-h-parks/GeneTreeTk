@@ -78,7 +78,8 @@ class Bootstrap():
             ft = FastTree(multithreaded=False)
             ft.bootstrap(input_tree,
                          msa_file,
-                         'prot', prot_model,
+                         'prot', 
+                         prot_model,
                          num_replicates,
                          output_dir,
                          self.cpus)

@@ -1,1 +1,10 @@
-0.0.6
+0.0.13
+- fixed issue with zero bootstrap values sometimes being seen as supported splits
+
+0.0.12
+- added check to see if bootstrap values are between [0, 1] and modify to [0, 100]
+
+0.0.11
+- added output tree with leaves given strictly be genome accessions
+
+0.0.10

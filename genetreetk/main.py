@@ -165,9 +165,17 @@ class OptionsParser():
         check_file_exists(options.tree2)
         
         tc = TreeCompare()
-        rf, normalized_rf = tc.robinson_foulds(options.tree1, options.tree2)
-        print 'Robinson-Foulds: %d' % rf
-        print 'Normalized Robinson-Foulds: %.2f' % normalized_rf
+        if options.weighted:
+            wrf = tc.weighted_robinson_foulds(options.tree1, 
+                                                options.tree2,
+                                                options.taxa_list)
+            print 'Weighted Robinson-Foulds: %.3f' % wrf
+        else:
+            rf, normalized_rf = tc.robinson_foulds(options.tree1, 
+                                                    options.tree2,
+                                                    options.taxa_list)
+            print 'Robinson-Foulds: %d' % rf
+            print 'Normalized Robinson-Foulds: %.3f' % normalized_rf
                          
     def supported_splits(self, options):
         """Supported bipartitions of common taxa shared between two trees."""
@@ -178,7 +186,10 @@ class OptionsParser():
         tc = TreeCompare()
         tc.supported_splits(options.tree1, 
                             options.tree2,
-                            options.min_support)
+                            options.split_file,
+                            options.min_support,
+                            options.max_depth,
+                            options.taxa_list)
         
     def missing_splits(self, options):
         """Report supported bipartitions in reference tree not in comparison tree."""
@@ -189,7 +200,8 @@ class OptionsParser():
         tc = TreeCompare()
         tc.report_missing_splits(options.ref_tree, 
                                     options.compare_tree,
-                                    options.min_support)
+                                    options.min_support,
+                                    options.taxa_list)
                                     
     def midpoint(self, options):
         """"Midpoint root tree."""
