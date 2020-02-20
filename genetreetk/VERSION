@@ -1,3 +1,9 @@
+0.0.15
+- fixed bug with 'reduce' workflow which needed to be updated to consider the tree workflow skip_rooting flag
+
+0.0.14
+- added --skip_rooting flag to skip midpoint rooting of tree
+
 0.0.13
 - fixed issue with zero bootstrap values sometimes being seen as supported splits
 

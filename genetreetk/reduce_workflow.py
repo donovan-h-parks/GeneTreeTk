@@ -119,6 +119,7 @@ class Reduce():
         # generate msa with reduced sequences
         self.logger.info('Extracting sequences to retain.')
         genes_to_retain = self.read_ids(gene_id_file)
+        self.logger.info(' ...identified %d sequences to retain.' % len(genes_to_retain))
 
         seqs = seq_io.read_fasta(homolog_file)
         reduced_seqs = {}
@@ -147,6 +148,7 @@ class Reduce():
         tree_output = tw.run(trimmed_msa_output,
                                 tree_program,
                                 prot_model,
+                                False,
                                 output_dir)
                                 
         # create tax2tree consensus map and decorate tree

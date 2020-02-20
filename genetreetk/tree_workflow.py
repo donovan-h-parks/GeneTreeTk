@@ -58,6 +58,7 @@ class TreeWorkflow():
     def run(self, msa_file, 
                 tree_program, 
                 prot_model,
+                skip_rooting,
                 output_dir):
         """Infer tree.
 
@@ -106,13 +107,16 @@ class TreeWorkflow():
             tree_unrooted_output = raxml.run(phylip_msa_file, prot_model, raxml_dir)
 
         # root tree at midpoint
-        seqs = seq_io.read(msa_file)
-        if len(seqs) > 2:
-            self.logger.info('Rooting tree at midpoint.')
-            tree = dendropy.Tree.get_from_path(tree_unrooted_output, schema='newick', rooting="force-rooted", preserve_underscores=True)
-            tree.reroot_at_midpoint(update_bipartitions=False)
-        
-        tree_output = os.path.join(output_dir, prefix + '.rooted.tree')
-        tree.write_to_path(tree_output, schema='newick', suppress_rooting=True, unquoted_underscores=True)
+        if not skip_rooting:
+            seqs = seq_io.read(msa_file)
+            if len(seqs) > 2:
+                self.logger.info('Rooting tree at midpoint.')
+                tree = dendropy.Tree.get_from_path(tree_unrooted_output, schema='newick', rooting="force-rooted", preserve_underscores=True)
+                tree.reroot_at_midpoint(update_bipartitions=False)
+            
+            tree_output = os.path.join(output_dir, prefix + '.rooted.tree')
+            tree.write_to_path(tree_output, schema='newick', suppress_rooting=True, unquoted_underscores=True)
+        else:
+            tree_output = tree_unrooted_output
         
         return tree_output

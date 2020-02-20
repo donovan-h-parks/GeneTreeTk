@@ -70,6 +70,7 @@ class OptionsParser():
                            options.msa_program,
                            options.tree_program,
                            options.prot_model,
+                           options.skip_rooting,
                            options.output_dir)
                            
     def concat(self, options):

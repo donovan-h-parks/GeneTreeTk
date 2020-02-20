@@ -1,0 +1,341 @@
+#!/srv/sw/python/2.7.4/bin/python
+
+###############################################################################
+#                                                                             #
+#    This program is free software: you can redistribute it and/or modify     #
+#    it under the terms of the GNU General Public License as published by     #
+#    the Free Software Foundation, either version 3 of the License, or        #
+#    (at your option) any later version.                                      #
+#                                                                             #
+#    This program is distributed in the hope that it will be useful,          #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of           #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            #
+#    GNU General Public License for more details.                             #
+#                                                                             #
+#    You should have received a copy of the GNU General Public License        #
+#    along with this program. If not, see <http://www.gnu.org/licenses/>.     #
+#                                                                             #
+###############################################################################
+
+__author__ = "Donovan Parks"
+__copyright__ = "Copyright 2017"
+__credits__ = ["Donovan Parks"]
+__license__ = "GPL3"
+__maintainer__ = "Donovan Parks"
+__email__ = "donovan.parks@gmail.com"
+__status__ = "Development"
+
+import os
+import sys
+import ntpath
+import logging
+import argparse
+
+from genetreetk.main import OptionsParser
+
+from biolib.misc.custom_help_formatter import CustomHelpFormatter
+from biolib.logger import logger_setup
+
+
+def version():
+    """Read program version from file."""
+    import genetreetk
+    version_file = open(os.path.join(genetreetk.__path__[0], 'VERSION'))
+    return version_file.readline().strip()
+
+
+def print_help():
+    print ''
+    print '                ...::: GeneTreeTk v' + version() + ' :::...'''
+    print '''\
+
+  Gene tree inference:
+    blast  -> Infer gene tree using BLAST
+    concat -> Infer concatenated gene tree
+
+  Tree utilities:
+    reduce    -> Infer tree for reduced set of genes
+    bootstrap -> Calculate bootstrap support for tree
+    prune     -> Prune tree to a specific set of extant taxa
+
+  Database utilities:
+    prokka    -> Run Prokka across multiple genome bins
+    create_db -> Create dereplicated GeneTreeTk-compatible database
+    
+  Compare trees:
+    robinson_foulds  -> Calculate Robinson-Foulds distance between trees
+    supported_splits -> Supported bipartitions of common taxa shared between two trees
+    missing_splits   -> Report supported bipartitions in reference tree not in comparison tree
+    
+  Reroot tree:
+    midpoint -> Reroot tree at midpoint
+    
+  Use: genetreetk <command> -h for command specific help.
+
+  Feature requests or bug reports can be sent to Donovan Parks (donovan.parks@gmail.com)
+    or posted on GitHub (https://github.com/dparks1134/GeneTreeTk).
+    '''
+    
+    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(add_help=False)
+    subparsers = parser.add_subparsers(help="--", dest='subparser_name')
+
+    # options for inferring a gene tree using blast
+    blast_parser = subparsers.add_parser('blast',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Infer gene tree using BLAST.')
+
+    req_args = blast_parser.add_argument_group('required arguments')
+    req_args.add_argument('-q', '--query_proteins', help='protein sequences for identifying homologs (fasta format)', required=True)
+    req_args.add_argument('-d', '--db_file', help='BLAST database of reference proteins', required=True)
+    req_args.add_argument('-t', '--taxonomy_file', help='taxonomic assignment of each reference genomes', required=True)
+    req_args.add_argument('-o', '--output_dir', help='output directory', required=True)
+
+    optonal_args = blast_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('--custom_db_file', help='BLAST database of additional proteins', default=None)
+    optonal_args.add_argument('--custom_taxonomy_file', help='taxonomic assignment of each genomes in custom database', default=None)
+    
+    optonal_args.add_argument('--homology_search', choices=['blastp-fast', 'blastp', 'diamond'], help="type of homology search to perform", default='blastp-fast')
+    optonal_args.add_argument('-e', '--evalue', help='evalue cutoff for identifying homologs', type=float, default=1e-5)
+    optonal_args.add_argument('-p', '--per_identity', help="percent amino acid identity for identifying homologs", type=float, default=30.0)
+    optonal_args.add_argument('-a', '--per_aln_len', help="percent alignment length of query sequence for identifying homologs", type=float, default=50.0)
+    optonal_args.add_argument('-m', '--max_matches', help="maximum number of matches per query protein", type=int, default=50000)
+    optonal_args.add_argument('--restrict_taxon', help='restrict alignment to specific taxonomic group (e.g., d__Archaea)', default=None)
+    
+    optonal_args.add_argument('--msa_program', choices=['mafft', 'muscle'], help="program to use for multiple sequence alignment (MSA)", default='mafft')
+    
+    optonal_args.add_argument('--min_per_taxa', help='minimum percentage of taxa required to retain column in MSA', type=float, default=50.0)
+    optonal_args.add_argument('--consensus', help='minimum percentage of the same amino acid required to retain column in MSA', type=float, default=0.0)
+    optonal_args.add_argument('--min_per_bp', help='minimum percentage of base pairs in MSA required to keep a trimmed sequence', type=float, default=50.0)
+    optonal_args.add_argument('--use_trimAl', help='filter columns in MSA using trimAl (other trimming parameters are ignored)', action='store_true')
+
+    optonal_args.add_argument('--tree_program', choices=['fasttree', 'raxml'], help="program to use for tree inference", default='fasttree')
+    optonal_args.add_argument('--prot_model', choices=['LG', 'WAG', 'AUTO'], help='protein substitution model for tree inference', default='LG')
+    
+    optonal_args.add_argument('--skip_rooting', help="do not perform midpoint rooting before decorating tree", action='store_true')
+     
+    optonal_args.add_argument('--cpus', type=int, help='CPUs to use throughout the process', default=1)
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    # infer concatenated gene tree
+    concat_parser = subparsers.add_parser('concat',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Infer concatenated gene tree.')
+
+    req_args = concat_parser.add_argument_group('required arguments')
+    req_args.add_argument('-g', '--gene_dirs', nargs='+', help='output directories for individual genes produced by GeneTreeTk', required=True)
+    req_args.add_argument('-o', '--output_dir', help='output directory', required=True)
+    
+    optonal_args = concat_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('--split_chars', nargs='?', help='character(s) to use for splitting taxa and gene identifiers', default='~')
+    
+    optonal_args.add_argument('--min_per_gene', help='minimum percentage of genes required to retain taxa', type=float, default=50.0)
+    optonal_args.add_argument('--min_per_bps', help='minimum percentage of base pairs required to retain taxa', type=float, default=50.0)
+    
+    optonal_args.add_argument('--tree_program', choices=['fasttree', 'raxml'], help="program to use for tree inference", default='fasttree')
+    optonal_args.add_argument('--prot_model', choices=['LG', 'WAG', 'AUTO'], help='protein substitution model for tree inference', default='LG')
+     
+    optonal_args.add_argument('--cpus', type=int, help='CPUs to use throughout the process', default=1)
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    # infer tree over a reduced set of genes
+    reduce_parser = subparsers.add_parser('reduce',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Infer tree for reduced set of genes.')
+
+    req_args = reduce_parser.add_argument_group('required arguments')
+    req_args.add_argument('-i', '--homolog_file', help='file containing unaligned homologs used to infer initial tree (fasta format)', required=True)
+    req_args.add_argument('-g', '--gene_ids', help='gene IDs to retain in reduced tree (one id per line)', required=True)
+    req_args.add_argument('-t', '--taxonomy_file', help='taxonomic assignment of genes in gene tree', required=True)
+    req_args.add_argument('-o', '--output_dir', help='output directory', required=True)
+
+    optonal_args = reduce_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('--msa_program', choices=['mafft', 'muscle'], help="program to use for multiple sequence alignment (MSA)", default='mafft')
+    optonal_args.add_argument('--min_per_taxa', help='minimum percentage of taxa required to retain column in MSA', type=float, default=50.0)
+    optonal_args.add_argument('--consensus', help='minimum percentage of the same amino acid required to retain column in MSA', type=float, default=0.0)
+    optonal_args.add_argument('--min_per_bp', help='minimum percentage of base pairs in MSA required to keep a trimmed sequence', type=float, default=50.0)
+    optonal_args.add_argument('--use_trimAl', help='filter columns in MSA using trimAl (other trimming parameters are ignored)', action='store_true')
+    optonal_args.add_argument('--tree_program', choices=['fasttree', 'raxml'], help="program to use for tree inference", default='fasttree')
+    optonal_args.add_argument('--prot_model', choices=['LG', 'WAG', 'AUTO'], help='protein substitution model for tree inference', default='LG')
+    optonal_args.add_argument('--cpus', type=int, help='CPUs to use throughout the process', default=1)
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    # calculate bootstrap support
+    bootstrap_parser = subparsers.add_parser('bootstrap',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Calculate bootstrap support for tree.')
+
+    req_args = bootstrap_parser.add_argument_group('required arguments')
+    req_args.add_argument('-t', '--tree', help='tree requiring bootstrap support values', required=True)
+    req_args.add_argument('-m', '--msa_file', help='multiple sequence alignment used to infer tree (fasta format)', required=True)
+    req_args.add_argument('-o', '--output_dir', help='output directory', required=True)
+
+    optonal_args = bootstrap_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('-r', '--num_replicates', help='number of bootstrap replicates to perform', type=int, default=100)
+    optonal_args.add_argument('--tree_program', choices=['fasttree', 'raxml'], help="program to use for inferring bootstrap trees", default='fasttree')
+    optonal_args.add_argument('--prot_model', choices=['LG', 'WAG'], help='protein substitution model for inferring bootstrap trees', default='LG')
+    optonal_args.add_argument('--cpus', type=int, help='CPUs to use throughout the process', default=1)
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    # Prune command
+    prune_parser = subparsers.add_parser('prune',
+                                            add_help=False,
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Prune tree to a specific set of extant taxa.')
+    req_args = prune_parser.add_argument_group('required arguments')
+    req_args.add_argument('-i', '--tree', help='input tree in Newick format')
+    req_args.add_argument('-t', '--taxa_to_retain', help='input file specify taxa to retain')
+    req_args.add_argument('-o', '--output_tree', help='pruned output tree')
+    
+    optonal_args = prune_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+    
+    # run prokka across multiple bins
+    run_prokka_parser = subparsers.add_parser('prokka',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Run Prokka across multiple genome bins.')
+
+    req_args = run_prokka_parser.add_argument_group('required arguments')
+    req_args.add_argument('-g', '--genome_dir', help="directory containing genome bins")
+    req_args.add_argument('-o', '--output_dir', help='directory to store results')
+
+    optonal_args = run_prokka_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('-x', '--extension', default='fna', help="extension of genome FASTA files (other files in directory are ignored)")
+    optonal_args.add_argument('--kingdom', help='kingdom to use for gene annotation', choices=['Archaea', 'Bacteria'], default='Bacteria')
+    optonal_args.add_argument('--cpus', type=int, default=1, help='number of cpus to use')
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    # create database that is compatible with mingle
+    create_db_parser = subparsers.add_parser('create_db',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Create dereplicated mingle-compatible database.')
+
+    req_args = create_db_parser.add_argument_group('required arguments')
+    req_args.add_argument('genome_prot_dir', help="directory containing amino acid genes for each genome")
+    req_args.add_argument('output_dir', help='directory to store results')
+
+    optonal_args = create_db_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('-m', '--max_taxa', type=int, default=50, help='maximum taxa to retain in a named group')
+    optonal_args.add_argument('-r', '--rank', type=int, default=5, help='rank to preform dereplication [0=domain, 6=species]')
+    optonal_args.add_argument('-p', '--per_identity', type=float, default=90.0, help="percent identity for subsampling similar genes")
+    optonal_args.add_argument('-a', '--per_aln_len', type=float, default=90.0, help="percent alignment length for subsampling similar genes")
+    optonal_args.add_argument('-x', '--extension', default='faa', help="extension of files with called genes (other files in directory are ignored)")
+    optonal_args.add_argument('--taxonomy', default=None, help='taxonomy string for each genome')
+    optonal_args.add_argument('--type_strains', default=None, help='file specifying type strains that should not be filtered')
+    optonal_args.add_argument('--genomes_to_process', default=None, help='list of genomes to retain instead of performing taxon subsampling')
+    optonal_args.add_argument('--keep_all_genes', action="store_true", default=False, help='restricts filtering to taxa')
+    optonal_args.add_argument('--no_reformat_gene_ids', action="store_true", default=False, help='do not reformat gene identifies')
+    optonal_args.add_argument('--cpus', type=int, default=1, help='number of cpus to use')
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+    
+    # calculate Robinson-Foulds distance between trees
+    robinson_foulds_parser = subparsers.add_parser('robinson_foulds',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Calculate Robinson-Foulds distance between trees.')
+
+    req_args = robinson_foulds_parser.add_argument_group('required arguments')
+    req_args.add_argument('--tree1', help="first input tree")
+    req_args.add_argument('--tree2', help='second input tree')
+
+    optonal_args = robinson_foulds_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('--weighted', help="perform weighted Robinson-Foulds", action='store_true')
+    optonal_args.add_argument('--taxa_list', help='prune trees to specified by taxa before comparison')
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    # supported bipartitions of common taxa shared between two trees
+    supported_splits_parser = subparsers.add_parser('supported_splits',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Supported bipartitions of common taxa shared between two trees.')
+
+    req_args = supported_splits_parser.add_argument_group('required arguments')
+    req_args.add_argument('--tree1', help="first input tree")
+    req_args.add_argument('--tree2', help='second input tree')
+
+    optonal_args = supported_splits_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('--split_file', help='output file with information about congruent and incongruent splits')
+    optonal_args.add_argument('-s', '--min_support', type=float, default=70, help='minimum support to consider split')
+    optonal_args.add_argument('-d', '--max_depth', type=float, default=1.0, help='ignore splits below the specified depth [0, 1.0]')
+    optonal_args.add_argument('--taxa_list', help='prune trees to specified by taxa before comparison')
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    # supported bipartitions of common taxa shared between two trees
+    missing_splits_parser = subparsers.add_parser('missing_splits',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Report supported bipartitions in reference tree not in comparison tree.')
+
+    req_args = missing_splits_parser.add_argument_group('required arguments')
+    req_args.add_argument('--ref_tree', help="reference tree")
+    req_args.add_argument('--compare_tree', help='comparison tree')
+
+    optonal_args = missing_splits_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('-s', '--min_support', type=float, default=70, help='minimum support in reference tree to consider split')
+    optonal_args.add_argument('--taxa_list', help='prune trees to specified by taxa before comparison')
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+    
+    # reroot tree at midpoint
+    midpoint_parser = subparsers.add_parser('midpoint',
+                                            add_help=False,
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Reroot tree at midpoint.')
+    req_args = midpoint_parser.add_argument_group('required arguments')
+    req_args.add_argument('--in_tree', help="tree to reroot")
+    req_args.add_argument('--out_tree', help="output tree")
+    
+    optonal_args = midpoint_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    # get and check options
+    options = None
+    if(len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv == '--help'):
+        print_help()
+        sys.exit(0)
+    else:
+        options = parser.parse_args()
+        
+    if hasattr(options, 'output_dir'):
+        logger_setup(options.output_dir, "genetreetk.log", "GeneTreeTk", version(), options.silent)
+    else:
+        logger_setup(None, "genetreetk.log", "GeneTreeTk", version(), options.silent)
+        
+    # do what we came here to do
+    try:
+        parser = OptionsParser()
+        if(False):
+            # import pstats
+            # p = pstats.Stats('prof')
+            # p.sort_stats('cumulative').print_stats(10)
+            # p.sort_stats('time').print_stats(10)
+            import cProfile
+            cProfile.run('parser.parse_options(options)', 'prof')
+        elif False:
+            import pdb
+            pdb.run(parser.parse_options(options))
+        else:
+            parser.parse_options(options)
+    except SystemExit as se:
+        print repr(se)
+        print "\nControlled exit resulting from an unrecoverable error or warning."
+    except:
+        print "\nUnexpected error:", sys.exc_info()[0]
+        raise

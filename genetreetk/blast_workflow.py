@@ -296,7 +296,7 @@ class BlastWorkflow():
             taxonomy_file, custom_taxonomy_file,
             evalue, per_identity, per_aln_len, max_matches, homology_search,
             min_per_taxa, consensus, min_per_bp, use_trimAl, restrict_taxon,
-            msa_program, tree_program, prot_model, 
+            msa_program, tree_program, prot_model, skip_rooting,
             output_dir):
         """Infer a gene tree for homologs genes identified by blast.
 
@@ -344,6 +344,8 @@ class BlastWorkflow():
             Program to use for tree inference ['fasttree', 'raxml'].
         prot_model : str
             Protein substitution model for tree inference ['WAG', 'LG', 'AUTO'].
+        skip_rooting : boolean
+            Skip midpoint rooting if True.
         output_dir : str
             Directory to store results.
         """
@@ -450,6 +452,7 @@ class BlastWorkflow():
         tree_output = tw.run(trimmed_msa_output,
                                 tree_program,
                                 prot_model,
+                                skip_rooting,
                                 output_dir)
 
         # create tax2tree consensus map and decorate tree
