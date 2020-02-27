@@ -1,4 +1,4 @@
-#!/srv/sw/python/2.7.4/bin/python
+#!/usr/bin/env python3
 
 ###############################################################################
 #                                                                             #
@@ -45,9 +45,9 @@ def version():
 
 
 def print_help():
-    print ''
-    print '                ...::: GeneTreeTk v' + version() + ' :::...'''
-    print '''\
+    print('')
+    print('                ...::: GeneTreeTk v' + version() + ' :::...''')
+    print('''\
 
   Gene tree inference:
     blast  -> Infer gene tree using BLAST
@@ -74,7 +74,7 @@ def print_help():
 
   Feature requests or bug reports can be sent to Donovan Parks (donovan.parks@gmail.com)
     or posted on GitHub (https://github.com/dparks1134/GeneTreeTk).
-    '''
+    ''')
     
     
 if __name__ == '__main__':
@@ -334,8 +334,8 @@ if __name__ == '__main__':
         else:
             parser.parse_options(options)
     except SystemExit as se:
-        print repr(se)
-        print "\nControlled exit resulting from an unrecoverable error or warning."
+        print(repr(se))
+        print("\nControlled exit resulting from an unrecoverable error or warning.")
     except:
-        print "\nUnexpected error:", sys.exc_info()[0]
+        print("\nUnexpected error:", sys.exc_info()[0])
         raise

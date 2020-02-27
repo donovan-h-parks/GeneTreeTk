@@ -147,9 +147,9 @@ class TreeCompare(object):
         
         tree1, tree2 = self._read_trees(tree1_file, tree2_file)
 
-        print 'Euclidean: %f' % self.euclidean(tree1, tree2)
-        print 'Robinson-Foulds: %f' % self.robinson_foulds(tree1, tree2)
-        print 'Weighted Robinson-Foulds: %f' % self.weighted_robinson_foulds(tree1, tree2)
+        print('Euclidean: %f' % self.euclidean(tree1, tree2))
+        print('Robinson-Foulds: %f' % self.robinson_foulds(tree1, tree2))
+        print('Weighted Robinson-Foulds: %f' % self.weighted_robinson_foulds(tree1, tree2))
         
     def report_missing_splits(self, ref_tree, compare_tree, min_support, taxa_list):
         """Report supported bipartitions in reference tree not in comparison tree."""
@@ -157,7 +157,7 @@ class TreeCompare(object):
         ref_tree, compare_tree = self._read_trees(ref_tree, compare_tree, taxa_list)
         
         incongruent = 0
-        print 'Missing splits with support >= %f:' % min_support
+        print('Missing splits with support >= %f:' % min_support)
         for n in ref_tree.preorder_node_iter(lambda n: not n.is_leaf()):
             support, label, aux_info = parse_label(n.label)
             
@@ -165,11 +165,11 @@ class TreeCompare(object):
                 if n.bipartition not in compare_tree.bipartition_encoding:
                     incongruent += 1
                     if label:
-                        print label, n.edge.length
+                        print(label, n.edge.length)
                     else:
-                        print ','.join([t.taxon.label for t in n.leaf_iter()])
+                        print(','.join([t.taxon.label for t in n.leaf_iter()]))
                     
-        print 'Missing splits: %d' % incongruent
+        print('Missing splits: %d' % incongruent)
         
     def _avg_descendant_rate(self, tree):
         """Calculate average rate of divergence for each nodes in a tree.
@@ -327,48 +327,48 @@ class TreeCompare(object):
         
         common_supported_splits, common_supported_splits_w = self._shared_support(tree1, tree2, min_support, max_depth)
 
-        print ''
-        print 'T1 -> T2'
-        print 'Non-trivial splits in T1: %d' % nontrivial_splits1
-        print 'Weight of non-trivial splits in T1: %g' % nontrivial_splits1_w
-        print 'Well-supported splits in T1: %d' % (congruent12 + incongruent12)
-        print 'Weight of well-supported splits in T1: %g' % (congruent12_w + incongruent12_w)
-        print 'Well-supported splits in T1 present in T2: %d' % congruent12
-        print 'Weight of well-support splits in T1 present in T2: %g' % congruent12_w
+        print('')
+        print('T1 -> T2')
+        print('Non-trivial splits in T1: %d' % nontrivial_splits1)
+        print('Weight of non-trivial splits in T1: %g' % nontrivial_splits1_w)
+        print('Well-supported splits in T1: %d' % (congruent12 + incongruent12))
+        print('Weight of well-supported splits in T1: %g' % (congruent12_w + incongruent12_w))
+        print('Well-supported splits in T1 present in T2: %d' % congruent12)
+        print('Weight of well-support splits in T1 present in T2: %g' % congruent12_w)
 
-        print ''
-        print 'T2 -> T1'
-        print 'Non-trivial splits in T2: %d' % nontrivial_splits2
-        print 'Weight of non-trivial splits in T2: %g' % nontrivial_splits2_w
-        print 'Well-supported splits in T2: %d' % (congruent21 + incongruent21)
-        print 'Weight of well-supported splits in T2: %g' % (congruent21_w + incongruent21_w)
-        print 'Well-supported splits in T2 present in T1: %d' % congruent21
-        print 'Weight of well-support splits in T2 present in T1: %g' % congruent21_w
+        print('')
+        print('T2 -> T1')
+        print('Non-trivial splits in T2: %d' % nontrivial_splits2)
+        print('Weight of non-trivial splits in T2: %g' % nontrivial_splits2_w)
+        print('Well-supported splits in T2: %d' % (congruent21 + incongruent21))
+        print('Weight of well-supported splits in T2: %g' % (congruent21_w + incongruent21_w))
+        print('Well-supported splits in T2 present in T1: %d' % congruent21)
+        print('Weight of well-support splits in T2 present in T1: %g' % congruent21_w)
         
-        print ''
-        print 'T1 <-> T2'
-        print 'Non-trivial splits in T1 and T2: %d' % (nontrivial_splits1 + nontrivial_splits2)
-        print 'Weight of non-trivial splits in T1 and T2: %g' % (nontrivial_splits1_w + nontrivial_splits2_w)
-        print 'Well-supported splits in T1 and T2: %d' % (congruent12 + incongruent12 + congruent21 + incongruent21)
+        print('')
+        print('T1 <-> T2')
+        print('Non-trivial splits in T1 and T2: %d' % (nontrivial_splits1 + nontrivial_splits2))
+        print('Weight of non-trivial splits in T1 and T2: %g' % (nontrivial_splits1_w + nontrivial_splits2_w))
+        print('Well-supported splits in T1 and T2: %d' % (congruent12 + incongruent12 + congruent21 + incongruent21))
         supported_splits_t12 = congruent12_w + incongruent12_w + congruent21_w + incongruent21_w
-        print 'Weight of well-supported splits in T1 and T2: %g' % supported_splits_t12
-        print 'Well-supported splits in common between T1 and T2: %d' % common_supported_splits
-        print 'Weight of well-support splits in common between T1 and T2: %g' % common_supported_splits_w
-        print 'Fraction of common well-supported splits: %g' % (common_supported_splits_w / supported_splits_t12)
+        print('Weight of well-supported splits in T1 and T2: %g' % supported_splits_t12)
+        print('Well-supported splits in common between T1 and T2: %d' % common_supported_splits)
+        print('Weight of well-support splits in common between T1 and T2: %g' % common_supported_splits_w)
+        print('Fraction of common well-supported splits: %g' % (common_supported_splits_w / supported_splits_t12))
         
         if split_file:
             fout = open(split_file, 'w')
             fout.write('Split\tStatus\tTree Comparison\tBranch Length\tSupport\n')
-            for split_lca, (length, support) in congruent_splits12.iteritems():
+            for split_lca, (length, support) in congruent_splits12.items():
                 if support is not None:
                     fout.write('%s\t%s\t%s\t%f\t%.2f\n' % (split_lca, 'Congruent', 'T1 -> T2', length, support))
-            for split_lca, (length, support) in congruent_splits21.iteritems():
+            for split_lca, (length, support) in congruent_splits21.items():
                 if support is not None:
                     fout.write('%s\t%s\t%s\t%f\t%.2f\n' % (split_lca, 'Congruent', 'T2 -> T1', length, support))
-            for split_lca, (length, support) in incongruent_splits12.iteritems():
+            for split_lca, (length, support) in incongruent_splits12.items():
                 if support is not None:
                     fout.write('%s\t%s\t%s\t%f\t%.2f\n' % (split_lca, 'Incongruent', 'T1 -> T2', length, support))
-            for split_lca, (length, support) in incongruent_splits21.iteritems():
+            for split_lca, (length, support) in incongruent_splits21.items():
                 if support is not None:
                     fout.write('%s\t%s\t%s\t%f\t%.2f\n' % (split_lca, 'Incongruent', 'T2 -> T1', length, support))
             fout.close()

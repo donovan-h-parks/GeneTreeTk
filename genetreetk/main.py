@@ -170,13 +170,13 @@ class OptionsParser():
             wrf = tc.weighted_robinson_foulds(options.tree1, 
                                                 options.tree2,
                                                 options.taxa_list)
-            print 'Weighted Robinson-Foulds: %.3f' % wrf
+            print(('Weighted Robinson-Foulds: %.3f' % wrf))
         else:
             rf, normalized_rf = tc.robinson_foulds(options.tree1, 
                                                     options.tree2,
                                                     options.taxa_list)
-            print 'Robinson-Foulds: %d' % rf
-            print 'Normalized Robinson-Foulds: %.3f' % normalized_rf
+            print(('Robinson-Foulds: %d' % rf))
+            print(('Normalized Robinson-Foulds: %.3f' % normalized_rf))
                          
     def supported_splits(self, options):
         """Supported bipartitions of common taxa shared between two trees."""

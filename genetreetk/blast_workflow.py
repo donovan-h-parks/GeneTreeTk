@@ -128,7 +128,7 @@ class BlastWorkflow():
             # record 3 postcontext genes
             if len(post_context_counter):
                 key_to_remove = None
-                for seq_id, count in post_context_counter.iteritems():
+                for seq_id, count in post_context_counter.items():
                     count -= 1
                     if count == -1:
                         gene_postcontext[seq_id] = list(local_context)
@@ -165,7 +165,7 @@ class BlastWorkflow():
         """
 
         filtered_gene_context = {}
-        for seq_id, context in gene_context.iteritems():
+        for seq_id, context in gene_context.items():
             _genome_id, gene_id = seq_id.split('~')
             scaffold_id = gene_id[0:gene_id.rfind('_')]
 
@@ -229,7 +229,7 @@ class BlastWorkflow():
             arb_metadata['gtdb_tax_string'] = ';'.join(taxonomy.get(genome_id, ''))
             arb_metadata['aligned_seq'] = seq
 
-            for k, v in metadata.iteritems():
+            for k, v in metadata.items():
                 arb_metadata[k] = v
 
             arb_metadata['gene_precontext'] = ' -> '.join(gene_precontext.get(seq_id, []))
@@ -394,7 +394,7 @@ class BlastWorkflow():
         if restrict_taxon:
             self.logger.info('Restricting homologs to %s.' % restrict_taxon)
             restricted_homologs = {}
-            for query_id, hit in homologs.iteritems():
+            for query_id, hit in homologs.items():
                 genome_id = hit.subject_id.split('~')[0]
                 if restrict_taxon in taxonomy[genome_id]:
                     restricted_homologs[query_id] = hit

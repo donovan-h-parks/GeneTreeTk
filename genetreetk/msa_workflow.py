@@ -121,7 +121,7 @@ class MsaWorkflow():
             seqs = seq_io.read_fasta(msa_output)
             tmp_seqs = seq_io.read_fasta(tmp_output)
             trimmed_seqs = seq_io.read_fasta(trimmed_msa_output)
-            self.logger.info('Trimmed alignment from %d to %d AA.' % (len(seqs.values()[0]), len(trimmed_seqs.values()[0])))
+            self.logger.info('Trimmed alignment from %d to %d AA.' % (len(list(seqs.values())[0]), len(list(trimmed_seqs.values())[0])))
             self.logger.info('%d of %d taxa were deemed to be too short and removed.' % (len(tmp_seqs)-len(trimmed_seqs), len(seqs)))
             os.remove(tmp_output)
         else:
@@ -132,8 +132,8 @@ class MsaWorkflow():
                                                                                                 consensus / 100.0, 
                                                                                                 min_per_bp / 100.0)
             
-            self.logger.info('Trimmed alignment from %d to %d AA (%d by minimum taxa percent, %d by consensus).' % (len(seqs.values()[0]), 
-                                                                                                                    len(trimmed_seqs.values()[0]),
+            self.logger.info('Trimmed alignment from %d to %d AA (%d by minimum taxa percent, %d by consensus).' % (len(list(seqs.values())[0]), 
+                                                                                                                    len(list(trimmed_seqs.values())[0]),
                                                                                                                     min_taxa_filtered, 
                                                                                                                     consensus_filtered))
             self.logger.info('%d of %d taxa were deemed to be too short and removed.' % (len(pruned_seqs), len(seqs)))

@@ -145,7 +145,7 @@ class CreateDatabase(object):
                 continue
 
             # get first classified rank
-            for rank_index in xrange(self.rank_index['s__'], -1, -1):
+            for rank_index in range(self.rank_index['s__'], -1, -1):
                 taxa = taxonomy[genome_id][rank_index]
                 if taxa != self.rank_prefixes[rank_index]:
                     break
@@ -156,7 +156,7 @@ class CreateDatabase(object):
         while len(reduced_genome_list) < max_taxa:
             genomes_to_select = max_taxa - len(reduced_genome_list)
             genomes_per_group = max(genomes_to_select / len(groups), 1)
-            for taxa, genome_ids in groups.iteritems():
+            for taxa, genome_ids in list(groups.items()):
                 selected_genomes = random.sample(genome_ids, min(len(genome_ids), genomes_per_group))
                 groups[taxa] = genome_ids.difference(selected_genomes)
 
@@ -186,11 +186,11 @@ class CreateDatabase(object):
         for genome_id in genome_list:
             genome_gene_file = os.path.join(gene_dir, genome_id + '.faa')
             if not os.path.exists(genome_gene_file):
-                print '[WARNING] Missing gene file for genome %s.' % genome_gene_file
+                print(('[WARNING] Missing gene file for genome %s.' % genome_gene_file))
                 continue
 
             if os.stat(genome_gene_file).st_size == 0:
-                print '[WARNING] Gene file is empty for genome %s.' % genome_gene_file
+                print(('[WARNING] Gene file is empty for genome %s.' % genome_gene_file))
                 continue
 
             for gene_id, seq, annotation in seq_io.read_fasta_seq(genome_gene_file, keep_annotation=True):
@@ -309,8 +309,8 @@ class CreateDatabase(object):
         os.system('comparem aai -p %d -a %d -c %d %s %s' % (per_identity, per_aln_len, cpus, rblast_dir, aai_dir))
 
         # identify homologs to be filtered
-        print ''
-        print '  Identifying homologs to be filtered.'
+        print('')
+        print('  Identifying homologs to be filtered.')
         shared_genes_dir = os.path.join(aai_dir, 'shared_genes')
         files = os.listdir(shared_genes_dir)
 
@@ -458,7 +458,7 @@ class CreateDatabase(object):
 
         fout.close()
 
-        total_genomes_to_process = sum([len(genome_list) for genome_list in rank_genomes.values()])
+        total_genomes_to_process = sum([len(genome_list) for genome_list in list(rank_genomes.values())])
         if total_genomes_to_process == 0:
             self.logger.error('No genomes found in directory: %s. Check the --extension flag used to identify genomes.' % genome_prot_dir)
             sys.exit(-1)
@@ -479,10 +479,10 @@ class CreateDatabase(object):
         total_genes_kept = 0
         total_genomes_kept = 0
         processed_genomes = 0
-        for taxa, genome_list in rank_genomes.iteritems():
+        for taxa, genome_list in list(rank_genomes.items()):
             processed_genomes += len(genome_list)
 
-            print '-------------------------------------------------------------------------------'
+            print('-------------------------------------------------------------------------------')
             self.logger.info('Processing %s | Finished %d of %d (%.2f%%) genomes.' % (taxa, processed_genomes, total_genomes_to_process, processed_genomes * 100.0 / total_genomes_to_process))
 
             # create directory with selected genomes

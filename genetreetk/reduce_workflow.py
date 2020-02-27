@@ -123,7 +123,7 @@ class Reduce():
 
         seqs = seq_io.read_fasta(homolog_file)
         reduced_seqs = {}
-        for seq_id, seq in seqs.iteritems():
+        for seq_id, seq in seqs.items():
             if seq_id in genes_to_retain:
                 reduced_seqs[seq_id] = seq
 
