@@ -31,6 +31,8 @@ import ntpath
 import logging
 import argparse
 
+sys.path = [os.path.join(os.path.dirname(os.path.realpath(__file__)),'..')] + sys.path
+
 from genetreetk.main import OptionsParser
 
 from biolib.misc.custom_help_formatter import CustomHelpFormatter
