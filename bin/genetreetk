@@ -52,8 +52,9 @@ def print_help():
     print('''\
 
   Gene tree inference:
-    blast  -> Infer gene tree using BLAST
-    concat -> Infer concatenated gene tree
+    blast      -> Infer gene tree using BLAST
+    concat     -> Infer concatenated gene tree
+    orthologue -> Infer gene trees after orthologue clustering
 
   Tree utilities:
     reduce    -> Infer tree for reduced set of genes
@@ -140,6 +141,46 @@ if __name__ == '__main__':
     
     optonal_args.add_argument('--tree_program', choices=['fasttree', 'raxml'], help="program to use for tree inference", default='fasttree')
     optonal_args.add_argument('--prot_model', choices=['LG', 'WAG', 'AUTO'], help='protein substitution model for tree inference', default='LG')
+     
+    optonal_args.add_argument('--cpus', type=int, help='CPUs to use throughout the process', default=1)
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+
+    # options for inferring a gene tree after orthologue clustering
+    blast_parser = subparsers.add_parser('orthologue',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Infer gene tree using BLAST.')
+
+    req_args = blast_parser.add_argument_group('required arguments')
+    req_args.add_argument('-q', '--query_proteins', help='protein sequences for identifying homologs (fasta format)', required=True)
+    req_args.add_argument('-d', '--db_file', help='BLAST database of reference proteins', required=True)
+    req_args.add_argument('-t', '--taxonomy_file', help='taxonomic assignment of each reference genomes', required=True)
+    req_args.add_argument('-o', '--output_dir', help='output directory', required=True)
+
+    optonal_args = blast_parser.add_argument_group('optional arguments')
+    # optonal_args.add_argument('--custom_db_file', help='BLAST database of additional proteins', default=None)
+    # optonal_args.add_argument('--custom_taxonomy_file', help='taxonomic assignment of each genomes in custom database', default=None)
+    
+    optonal_args.add_argument('--homology_search', choices=['blastp-fast', 'blastp', 'diamond'], help="type of homology search to perform", default='blastp-fast')
+    optonal_args.add_argument('-e', '--evalue', help='evalue cutoff for identifying homologs', type=float, default=1e-5)
+    optonal_args.add_argument('-p', '--per_identity', help="percent amino acid identity for identifying homologs", type=float, default=30.0)
+    optonal_args.add_argument('-a', '--per_aln_len', help="percent alignment length of query sequence for identifying homologs", type=float, default=50.0)
+    optonal_args.add_argument('-m', '--max_matches', help="maximum number of matches per query protein", type=int, default=50000)
+    optonal_args.add_argument('--restrict_taxon', help='restrict alignment to specific taxonomic group (e.g., d__Archaea)', default=None)
+    
+    optonal_args.add_argument('--msa_program', choices=['mafft', 'muscle'], help="program to use for multiple sequence alignment (MSA)", default='mafft')
+    
+    optonal_args.add_argument('--min_per_taxa', help='minimum percentage of taxa required to retain column in MSA', type=float, default=50.0)
+    optonal_args.add_argument('--consensus', help='minimum percentage of the same amino acid required to retain column in MSA', type=float, default=0.0)
+    optonal_args.add_argument('--min_per_bp', help='minimum percentage of base pairs in MSA required to keep a trimmed sequence', type=float, default=50.0)
+    optonal_args.add_argument('--use_trimAl', help='filter columns in MSA using trimAl (other trimming parameters are ignored)', action='store_true')
+
+    optonal_args.add_argument('--tree_program', choices=['fasttree', 'raxml'], help="program to use for tree inference", default='fasttree')
+    optonal_args.add_argument('--prot_model', choices=['LG', 'WAG', 'AUTO'], help='protein substitution model for tree inference', default='LG')
+    
+    optonal_args.add_argument('--skip_rooting', help="do not perform midpoint rooting before decorating tree", action='store_true')
      
     optonal_args.add_argument('--cpus', type=int, help='CPUs to use throughout the process', default=1)
     optonal_args.add_argument('--silent', help="suppress output", action='store_true')

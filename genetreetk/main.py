@@ -32,6 +32,7 @@ from genetreetk.prune import Prune
 from genetreetk.prokka import Prokka
 from genetreetk.create_database import CreateDatabase
 from genetreetk.tree_compare import TreeCompare
+from genetreetk.orthologue_workflow import OrthologueWorkflow
 
 
 class OptionsParser():
@@ -219,6 +220,42 @@ class OptionsParser():
                             suppress_rooting=True, 
                             unquoted_underscores=True)
 
+    def orthologue(self, options):
+        """Infer gene tree using BLAST after Orthologue clustering."""
+        
+        check_file_exists(options.query_proteins)
+        check_file_exists(options.db_file)
+        check_file_exists(options.taxonomy_file)
+
+        # sanity check arguments
+        if options.prot_model == 'AUTO' and options.tree_program != 'raxml':
+            self.logger.error("The 'AUTO' protein model can only be used with RAxML.")
+            sys.exit(-1)
+
+        workflow = OrthologueWorkflow(options.cpus)
+        workflow.run(
+            query_proteins=options.query_proteins,
+            db_file=options.db_file,
+            #custom_db_file=options.custom_db_file,
+            taxonomy_file=options.taxonomy_file,
+            custom_taxonomy_file=options.custom_taxonomy_file,
+            evalue=options.evalue,
+            per_identity=options.per_identity,
+            per_aln_len=options.per_aln_len,
+            max_matches=options.max_matches,
+            homology_search=options.homology_search,
+            min_per_taxa=options.min_per_taxa,
+            consensus=options.consensus,
+            min_per_bp=options.min_per_bp,
+            use_trimAl=options.use_trimAl,
+            restrict_taxon=options.restrict_taxon,
+            msa_program=options.msa_program,
+            tree_program=options.tree_program,
+            prot_model=options.prot_model,
+            skip_rooting=options.skip_rooting,
+            output_dir=options.output_dir)
+
+
 
     def parse_options(self, options):
         """Parse user options and call the correct pipeline(s)"""
@@ -227,6 +264,8 @@ class OptionsParser():
             self.blast(options)
         elif options.subparser_name == 'concat':
             self.concat(options)
+        elif options.subparser_name == 'orthologue':
+            self.orthologue(options)
         elif options.subparser_name == 'reduce':
             self.reduce(options)
         elif options.subparser_name == 'bootstrap':

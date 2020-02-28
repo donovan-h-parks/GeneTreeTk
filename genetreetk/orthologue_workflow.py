@@ -45,8 +45,8 @@ from numpy import (percentile as np_percentile,
 import dendropy
 
 
-class BlastWorkflow():
-    """Blast-based workflow for building a gene tree."""
+class OrthologueWorkflow():
+    """Blast-based workflow for building gene trees after finding orthologues."""
 
     def __init__(self, cpus):
         """Initialization.
@@ -70,14 +70,8 @@ class BlastWorkflow():
 
         self.cpus = cpus
 
-    def run(self, query_proteins,
-            db_file, custom_db_file,
-            taxonomy_file, custom_taxonomy_file,
-            evalue, per_identity, per_aln_len, max_matches, homology_search,
-            min_per_taxa, consensus, min_per_bp, use_trimAl, restrict_taxon,
-            msa_program, tree_program, prot_model, skip_rooting,
-            output_dir):
-        """Infer a gene tree for homologs genes identified by blast.
+    def run(self, **kwargs):
+        """Infer a gene tree for each query gene identified by blast.
 
         Workflow for inferring a gene tree from sequences identified as being
         homologs to a set of query proteins. Homologs are identified using BLASTP
@@ -93,8 +87,8 @@ class BlastWorkflow():
             Custom database of proteins.
         taxonomy_file : str
             Taxonomic assignment of each reference genomes.
-        custom_taxonomy_file : str
-            Taxonomic assignment of genomes in custom database.
+        # custom_taxonomy_file : str
+        #     Taxonomic assignment of genomes in custom database.
         evalue : float
             E-value threshold used to define homolog.
         per_identity : float
@@ -128,6 +122,28 @@ class BlastWorkflow():
         output_dir : str
             Directory to store results.
         """
+        query_proteins = kwargs.pop('query_proteins')
+        db_file = kwargs.pop('db_file')
+        # custom_db_file = kwargs.pop('custom_db_file')
+        taxonomy_file = kwargs.pop('taxonomy_file')
+        custom_taxonomy_file = kwargs.pop('custom_taxonomy_file')
+        evalue = kwargs.pop('evalue')
+        per_identity = kwargs.pop('per_identity')
+        per_aln_len = kwargs.pop('per_aln_len')
+        max_matches = kwargs.pop('max_matches')
+        homology_search = kwargs.pop('homology_search')
+        min_per_taxa = kwargs.pop('min_per_taxa')
+        consensus = kwargs.pop('consensus')
+        min_per_bp = kwargs.pop('min_per_bp')
+        use_trimAl = kwargs.pop('use_trimAl')
+        restrict_taxon = kwargs.pop('restrict_taxon')
+        msa_program = kwargs.pop('msa_program')
+        tree_program = kwargs.pop('tree_program')
+        prot_model = kwargs.pop('prot_model')
+        skip_rooting = kwargs.pop('skip_rooting')
+        output_dir = kwargs.pop('output_dir')
+        if len(kwargs) > 0:
+            raise Exception("Unexpected arguments detected: %s" % kwargs)
 
         # validate query sequence names for use with GeneTreeTk
         validate_seq_ids(query_proteins)
@@ -141,7 +157,7 @@ class BlastWorkflow():
             taxonomy.update(custom_taxonomy)
             
         # report distribution of query genes
-        mean_len, max_len, min_len, p10, p50, p90 = self._gene_distribution(query_proteins)
+        mean_len, max_len, min_len, p10, p50, p90 = gene_distribution(query_proteins)
         self.logger.info('Query gene lengths: min, mean, max = %d, %.1f, %d | p10, p50, p90 = %.1f, %.1f, %.1f' % (
                                                                                         min_len, mean_len, max_len, 
                                                                                         p10, p50, p90))
@@ -158,37 +174,15 @@ class BlastWorkflow():
         homologs = blast.identify_homologs(blast_output, evalue, per_identity, per_aln_len)
         self.logger.info('Identified %d homologs in reference database.' % len(homologs))
 
-        custom_homologs = None
-        if custom_db_file:
-            custom_blast_output = os.path.join(output_dir, 'custom_hits.tsv')
-            if homology_search == 'diamond':
-                diamond = Diamond(self.cpus)
-                diamond.blastp(query_proteins, custom_db_file, evalue, per_identity, per_aln_len, max_matches, custom_blast_output, output_fmt='custom')
-            else:
-                blast.blastp(query_proteins, custom_db_file, custom_blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
-            custom_homologs = blast.identify_homologs(custom_blast_output, evalue, per_identity, per_aln_len)
-            self.logger.info('Identified %d homologs in custom database.' % len(custom_homologs))
-            
-        # restrict homologs to specific taxonomic group
-        if restrict_taxon:
-            self.logger.info('Restricting homologs to %s.' % restrict_taxon)
-            restricted_homologs = {}
-            for query_id, hit in homologs.items():
-                genome_id = hit.subject_id.split('~')[0]
-                if restrict_taxon in taxonomy[genome_id]:
-                    restricted_homologs[query_id] = hit
-
-            self.logger.info('%d of %d homologs in reference database are from the specified group.' % (len(restricted_homologs), len(homologs)))
-            homologs = restricted_homologs
-
         if len(homologs) == 0:
-            self.logger.error('Too few homologs were identified. Gene tree cannot be inferred.')
+            self.logger.error('No homologs were identified at all. Gene tree cannot be inferred.')
             sys.exit()
 
         # extract homologs
         self.logger.info('Extracting homologs and determining local gene context.')
         db_homologs_tmp = os.path.join(output_dir, 'homologs_db.tmp')
-        gene_precontext, gene_postcontext = extract_homologs_and_context(homologs.keys(), db_file, db_homologs_tmp)
+        
+        gene_precontext, gene_postcontext = extract_homologs_and_context(set(homologs.keys()), db_file, db_homologs_tmp)
 
         # report gene length distribution of homologs
         mean_len, max_len, min_len, p10, p50, p90 = gene_distribution(db_homologs_tmp)
@@ -196,16 +190,35 @@ class BlastWorkflow():
                                                                                         min_len, mean_len, max_len, 
                                                                                         p10, p50, p90))
         
+        import IPython; IPython.embed()
+
+        # Split up blast hits into [{query_id->[hits]}] structure
+        # For each query, collect the top 5 hits' IDs
+        # Remove duplicates from top hit ID list
+        # BLAST all the top query sequences against the DB itself
+        # For each query:
+        # Find the sequences that are in all lists
+        # Output a FASTA file for that group
+        # If there are >= 4 sequences, then add it to the list for tree building
+
+        # TODO: In parallel MSA and tree making?
+        # Run MSA workflow
+        # Run tree making software
+        # Make Arb DB
+
+
+
         # concatenate homologs with initial query genes
         homolog_ouput_tmp = os.path.join(output_dir, 'homologs.faa.tmp')
-        if custom_homologs:
-            custom_db_homologs_tmp = os.path.join(output_dir, 'custom_homologs_db.tmp')
-            custom_gene_precontext, custom_gene_postcontext = self.extract_homologs_and_context(custom_homologs.keys(), custom_db_file, custom_db_homologs_tmp)
-            gene_precontext.update(custom_gene_precontext)
-            gene_postcontext.update(custom_gene_postcontext)
-            homologs.update(custom_homologs)
-            concatenate_files([query_proteins, db_homologs_tmp, custom_db_homologs_tmp], homolog_ouput_tmp)
-            os.remove(custom_db_homologs_tmp)
+        if False:#custom_homologs:
+            # custom_db_homologs_tmp = os.path.join(output_dir, 'custom_homologs_db.tmp')
+            # custom_gene_precontext, custom_gene_postcontext = self.extract_homologs_and_context(custom_homologs.keys(), custom_db_file, custom_db_homologs_tmp)
+            # gene_precontext.update(custom_gene_precontext)
+            # gene_postcontext.update(custom_gene_postcontext)
+            # homologs.update(custom_homologs)
+            # concatenate_files([query_proteins, db_homologs_tmp, custom_db_homologs_tmp], homolog_ouput_tmp)
+            # os.remove(custom_db_homologs_tmp)
+            pass
         else:
             concatenate_files([query_proteins, db_homologs_tmp], homolog_ouput_tmp)
 
@@ -213,7 +226,7 @@ class BlastWorkflow():
         
         # remove stop codons
         homolog_ouput = os.path.join(output_dir, 'homologs.faa')
-        self._remove_stop_codons(homolog_ouput_tmp, homolog_ouput)        
+        remove_stop_codons(homolog_ouput_tmp, homolog_ouput)        
         os.remove(homolog_ouput_tmp)
             
         # infer multiple sequence alignment
@@ -290,7 +303,7 @@ class BlastWorkflow():
         # create ARB metadata file
         self.logger.info('Creating ARB metadata file.')
         arb_metadata_file = os.path.join(output_dir, 'arb.metadata.txt')
-        self.create_arb_metadata(homologs, trimmed_msa_output, taxonomy,
+        create_arb_metadata(homologs, trimmed_msa_output, taxonomy,
                                  metadata,
                                  gene_precontext, gene_postcontext,
                                  arb_metadata_file)
