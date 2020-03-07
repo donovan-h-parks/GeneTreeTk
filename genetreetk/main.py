@@ -238,7 +238,7 @@ class OptionsParser():
             db_file=options.db_file,
             #custom_db_file=options.custom_db_file,
             taxonomy_file=options.taxonomy_file,
-            custom_taxonomy_file=options.custom_taxonomy_file,
+            #custom_taxonomy_file=options.custom_taxonomy_file,
             evalue=options.evalue,
             per_identity=options.per_identity,
             per_aln_len=options.per_aln_len,

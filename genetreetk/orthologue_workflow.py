@@ -126,7 +126,7 @@ class OrthologueWorkflow():
         db_file = kwargs.pop('db_file')
         # custom_db_file = kwargs.pop('custom_db_file')
         taxonomy_file = kwargs.pop('taxonomy_file')
-        custom_taxonomy_file = kwargs.pop('custom_taxonomy_file')
+        # custom_taxonomy_file = kwargs.pop('custom_taxonomy_file')
         evalue = kwargs.pop('evalue')
         per_identity = kwargs.pop('per_identity')
         per_aln_len = kwargs.pop('per_aln_len')
@@ -151,10 +151,6 @@ class OrthologueWorkflow():
         # read taxonomy file
         self.logger.info('Reading taxonomy file.')
         taxonomy = Taxonomy().read(taxonomy_file)
-
-        if custom_taxonomy_file:
-            custom_taxonomy = Taxonomy().read(custom_taxonomy_file)
-            taxonomy.update(custom_taxonomy)
             
         # report distribution of query genes
         mean_len, max_len, min_len, p10, p50, p90 = gene_distribution(query_proteins)
