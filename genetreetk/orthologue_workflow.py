@@ -15,12 +15,12 @@
 #                                                                             #
 ###############################################################################
 
-__author__ = "Donovan Parks"
-__copyright__ = "Copyright 2014"
-__credits__ = ["Donovan Parks"]
+__author__ = "Ben Woodcroft"
+__copyright__ = "Copyright 2020"
+__credits__ = ["Donovan Parks","Ben Woodcroft"]
 __license__ = "GPL3"
-__maintainer__ = "Donovan Parks"
-__email__ = "donovan.parks@gmail.com"
+__maintainer__ = "Ben Woodcroft"
+__email__ = "benjwoodcroft@gmail.com"
 __status__ = "Development"
 
 import os
@@ -57,12 +57,12 @@ class OrthologueWorkflow():
             Number of cpus to use during homology search.
         """
 
-        check_dependencies(['blastp', 
+        check_dependencies(['blastp',
                             'mafft',
-                            'muscle', 
-                            'FastTreeMP', 
-                            'raxmlHPC-PTHREADS-SSE3', 
-                            't2t', 
+                            'muscle',
+                            'FastTreeMP',
+                            'raxmlHPC-PTHREADS-SSE3',
+                            't2t',
                             'seqmagick',
                             'trimal'])
 
@@ -151,22 +151,24 @@ class OrthologueWorkflow():
         # read taxonomy file
         self.logger.info('Reading taxonomy file.')
         taxonomy = Taxonomy().read(taxonomy_file)
-            
+
         # report distribution of query genes
         mean_len, max_len, min_len, p10, p50, p90 = gene_distribution(query_proteins)
         self.logger.info('Query gene lengths: min, mean, max = %d, %.1f, %d | p10, p50, p90 = %.1f, %.1f, %.1f' % (
-                                                                                        min_len, mean_len, max_len, 
+                                                                                        min_len, mean_len, max_len,
                                                                                         p10, p50, p90))
 
         # identify homologs using BLASTP
         self.logger.info('Identifying homologs using %s.' % homology_search)
         blast = Blast(self.cpus)
         blast_output = os.path.join(output_dir, 'reference_hits.tsv')
-        if homology_search == 'diamond':
-            diamond = Diamond(self.cpus)
-            diamond.blastp(query_proteins, db_file, evalue, per_identity, per_aln_len, max_matches, blast_output, output_fmt='custom')
-        else:
-            blast.blastp(query_proteins, db_file, blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
+        # Commented out below for debug
+        # if homology_search == 'diamond':
+        #     raise Exception("DIAMOND is not implemented all the way through")
+        #     diamond = Diamond(self.cpus)
+        #     diamond.blastp(query_proteins, db_file, evalue, per_identity, per_aln_len, max_matches, blast_output, output_fmt='custom')
+        # else:
+        #     blast.blastp(query_proteins, db_file, blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
         homologs = blast.identify_homologs(blast_output, evalue, per_identity, per_aln_len)
         self.logger.info('Identified %d homologs in reference database.' % len(homologs))
 
@@ -177,21 +179,60 @@ class OrthologueWorkflow():
         # extract homologs
         self.logger.info('Extracting homologs and determining local gene context.')
         db_homologs_tmp = os.path.join(output_dir, 'homologs_db.tmp')
-        
+
         gene_precontext, gene_postcontext = extract_homologs_and_context(set(homologs.keys()), db_file, db_homologs_tmp)
 
         # report gene length distribution of homologs
         mean_len, max_len, min_len, p10, p50, p90 = gene_distribution(db_homologs_tmp)
         self.logger.info('Homolog gene lengths: min, mean, max = %d, %.1f, %d | p10, p50, p90 = %.1f, %.1f, %.1f' % (
-                                                                                        min_len, mean_len, max_len, 
+                                                                                        min_len, mean_len, max_len,
                                                                                         p10, p50, p90))
-        
-        import IPython; IPython.embed()
 
         # Split up blast hits into [{query_id->[hits]}] structure
+        query_to_hits = {}
+        for hit_name, blast_hit in homologs.items():
+            query = blast_hit.query_id
+            if query not in query_to_hits:
+                query_to_hits[query] = []
+            query_to_hits[query].append(blast_hit)
+        self.logger.info("Found {} query sequences with 1 or more homologs".format(len(query_to_hits)))
+
         # For each query, collect the top 5 hits' IDs
         # Remove duplicates from top hit ID list
+        top5_hit_ids = set()
+        for query, hits in query_to_hits.items():
+            if len(hits) < 5:
+                for h in hits:
+                    top5_hit_ids.add(h.subject_id)
+            else:
+                for i in range(5):
+                    top5_hit_ids.add(hits[i].subject_id)
+        self.logger.info("Extracting homologous sequences for {} top hits ..".format(len(top5_hit_ids)))
+
         # BLAST all the top query sequences against the DB itself
+        db_top_homologs_tmp = os.path.join(output_dir, 'top_homologs_db.tmp')
+        extract_homologs_and_context(top5_hit_ids, db_homologs_tmp, db_top_homologs_tmp)
+        self.logger.info("BLASTing top homologues against DB ..")
+        tophit_blast_output = os.path.join(output_dir, 'tophit_hits.tsv')
+        if homology_search == 'diamond':
+            diamond = Diamond(self.cpus)
+            diamond.blastp(db_top_homologs_tmp, db_file, evalue, per_identity, per_aln_len, max_matches, tophit_blast_output, output_fmt='custom')
+        else:
+            blast.blastp(db_top_homologs_tmp, db_file, tophit_blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
+        top_homologs = blast.identify_homologs(tophit_blast_output, evalue, per_identity, per_aln_len)
+
+        # Identify bitscores of blast against the query sequences
+        back_blast_output = os.path.join(output_dir, 'back_blast.tsv')
+        if homology_search == 'diamond':
+            raise Exception("Not implemented")
+        else:
+            query_db = os.path.join(output_dir, 'query_blast_db')
+            logging.info("Creating BLAST DB for query sequences ..")
+            # Currently a bug in biolib: https://github.com/dparks1134/biolib/pull/3
+            os.system(blast.create_blastp_db_cmd(query_proteins, query_db))
+            logging.info("Querying top homologues against query sequences")
+            blast.blastp(db_top_homologs_tmp, query_db back_blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
+
         # For each query:
         # Find the sequences that are in all lists
         # Output a FASTA file for that group
@@ -219,19 +260,19 @@ class OrthologueWorkflow():
             concatenate_files([query_proteins, db_homologs_tmp], homolog_ouput_tmp)
 
         os.remove(db_homologs_tmp)
-        
+
         # remove stop codons
         homolog_ouput = os.path.join(output_dir, 'homologs.faa')
-        remove_stop_codons(homolog_ouput_tmp, homolog_ouput)        
+        remove_stop_codons(homolog_ouput_tmp, homolog_ouput)
         os.remove(homolog_ouput_tmp)
-            
+
         # infer multiple sequence alignment
         msa = MsaWorkflow(self.cpus)
         trimmed_msa_output = msa.run(homolog_ouput,
-                                        min_per_taxa, 
-                                        consensus, 
-                                        min_per_bp, 
-                                        use_trimAl, 
+                                        min_per_taxa,
+                                        consensus,
+                                        min_per_bp,
+                                        use_trimAl,
                                         msa_program,
                                         output_dir)
 
@@ -257,7 +298,7 @@ class OrthologueWorkflow():
         t2t_tree = os.path.join(output_dir, 'homologs.tax2tree.tree')
         cmd = 't2t decorate -m %s -t %s -o %s' % (output_taxonomy_file, tree_output, t2t_tree)
         os.system(cmd)
-        
+
         # create tree with leaf nodes given as genome accessions
         tree = dendropy.Tree.get_from_path(t2t_tree,
                                             schema='newick',
@@ -292,7 +333,7 @@ class OrthologueWorkflow():
         metadata['genetreetk_msa_consensus'] = str(consensus)
         metadata['genetreetk_msa_min_per_bp'] = str(min_per_bp)
         metadata['genetreetk_msa_program'] = msa_program
-        
+
         metadata['genetreetk_tree_program'] = tree_program
         metadata['genetreetk_tree_prot_model'] = prot_model
 
