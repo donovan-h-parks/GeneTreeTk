@@ -169,17 +169,18 @@ class OrthologueWorkflow():
         #     diamond.blastp(query_proteins, db_file, evalue, per_identity, per_aln_len, max_matches, blast_output, output_fmt='custom')
         # else:
         #     blast.blastp(query_proteins, db_file, blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
-        homologs = blast.identify_homologs(blast_output, evalue, per_identity, per_aln_len)
+
+        # Split up blast hits into [{query_id->[hits]}] structure
+        query_to_hits = self._blast_result_to_dictionary(blast, blast_output)
         self.logger.info('Identified %d homologs in reference database.' % len(homologs))
 
-        if len(homologs) == 0:
-            self.logger.error('No homologs were identified at all. Gene tree cannot be inferred.')
-            sys.exit()
+        if len(query_to_hits) == 0:
+            self.logger.error('No homologs were identified at all. Cannot continue.')
+            sys.exit(1)
 
         # extract homologs
         self.logger.info('Extracting homologs and determining local gene context.')
         db_homologs_tmp = os.path.join(output_dir, 'homologs_db.tmp')
-
         gene_precontext, gene_postcontext = extract_homologs_and_context(set(homologs.keys()), db_file, db_homologs_tmp)
 
         # report gene length distribution of homologs
@@ -188,38 +189,25 @@ class OrthologueWorkflow():
                                                                                         min_len, mean_len, max_len,
                                                                                         p10, p50, p90))
 
-        # Split up blast hits into [{query_id->[hits]}] structure
-        query_to_hits = {}
-        for hit_name, blast_hit in homologs.items():
-            query = blast_hit.query_id
-            if query not in query_to_hits:
-                query_to_hits[query] = []
-            query_to_hits[query].append(blast_hit)
-        self.logger.info("Found {} query sequences with 1 or more homologs".format(len(query_to_hits)))
-
         # For each query, collect the top 5 hits' IDs
         # Remove duplicates from top hit ID list
         top5_hit_ids = set()
         for query, hits in query_to_hits.items():
-            if len(hits) < 5:
-                for h in hits:
-                    top5_hit_ids.add(h.subject_id)
-            else:
-                for i in range(5):
-                    top5_hit_ids.add(hits[i].subject_id)
+            for h in hits[:5]:
+                top5_hit_ids.add(h.subject_id)
         self.logger.info("Extracting homologous sequences for {} top hits ..".format(len(top5_hit_ids)))
 
         # BLAST all the top query sequences against the DB itself
         db_top_homologs_tmp = os.path.join(output_dir, 'top_homologs_db.tmp')
-        extract_homologs_and_context(top5_hit_ids, db_homologs_tmp, db_top_homologs_tmp)
-        self.logger.info("BLASTing top homologues against DB ..")
+        tophit_blast_output = os.path.join(output_dir, 'tophit_hits.tsv')
+        if homology_search == 'diamond':
         tophit_blast_output = os.path.join(output_dir, 'tophit_hits.tsv')
         if homology_search == 'diamond':
             diamond = Diamond(self.cpus)
             diamond.blastp(db_top_homologs_tmp, db_file, evalue, per_identity, per_aln_len, max_matches, tophit_blast_output, output_fmt='custom')
         else:
             blast.blastp(db_top_homologs_tmp, db_file, tophit_blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
-        top_homologs = blast.identify_homologs(tophit_blast_output, evalue, per_identity, per_aln_len)
+        top_hits_to_hits = self._blast_result_to_dictionary(blast, tophit_blast_output)
 
         # Identify bitscores of blast against the query sequences
         back_blast_output = os.path.join(output_dir, 'back_blast.tsv')
@@ -230,15 +218,75 @@ class OrthologueWorkflow():
             logging.info("Creating BLAST DB for query sequences ..")
             # Currently a bug in biolib: https://github.com/dparks1134/biolib/pull/3
             os.system(blast.create_blastp_db_cmd(query_proteins, query_db))
-            logging.info("Querying top homologues against query sequences")
-            blast.blastp(db_top_homologs_tmp, query_db back_blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
+            logging.info("Querying top homologues against query sequences ..")
+            blast.blastp(db_top_homologs_tmp, query_db, back_blast_output, evalue, max_matches, output_fmt='custom', task=homology_search)
+            logging.info("Finished back blast")
+        backblast_to_hits = self._blast_result_to_dictionary(blast, back_blast_output)
 
         # For each query:
-        # Find the sequences that are in all lists
-        # Output a FASTA file for that group
-        # If there are >= 4 sequences, then add it to the list for tree building
+        ortholog_fasta_folder = os.path.join(output_dir, 'ortholog_fasta_files')
+        os.mkdir(ortholog_fasta_folder)
+        for query, hits in query_to_hits.items():
+            # In order to be a true orthologous group, the back blast should hit
+            # the query with a bitscore greater than the minimum bitscore of the
+            # top hits BLAST.
+
+            top_hits = list(hits[:5])
+
+            num_top_hits_with_backblast = 0
+            for top_hit_res in top_hits:
+                top_hit_name = top_hit_res.subject_id
+                backblast_hits_here = backblast_to_hits[top_hit_name]
+                # Minimum bitscore is the 500th highest bitscore, or 0 if the number of homologs identified is <500.
+                next_homologs_here = top_hits_to_hits[top_hit_name]
+                if len(next_homologs_here) == 500: #TODO: Remove hardcode
+                    min_bitscore = next_homologs_here[-1].bitscore #TODO: Remove hardcode
+                else:
+                    min_bitscore = 0
+                backblast_hit_possibles = []
+                for h in backblast_hits_here:
+                    if h.subject_id == query and h.bitscore > min_bitscore:
+                        num_top_hits_with_backblast += 1
+            if num_top_hits_with_backblast == 5:
+                # Found a qualifying orthologous group. Take the intersection of
+                # all hits amongst the original BLAST of the query and the top_hits.
+
+                # Put all the query hits into a list
+                intersection_set = set([h.subject_id for h in hits])
+                # Intersect each of the top hits second BLASTs
+                for top_hit_res in top_hits:
+                    to_intersect = [h.subject_id for h in top_hits_to_hits[top_hit_res.subject_id]]
+                    intersection_set = intersection_set.intersection(to_intersect)
+                logging.info("Found {} genes in the orthologue group for {}".format(
+                    len(intersection_set), query
+                ))
+                if len(intersection_set) > 0:
+                    fasta = os.path.join(ortholog_fasta_folder, "{}.orthologs.faa".format(query))
+                    extract_homologs_and_context(intersection_set, db_homologs_tmp, fasta)
+                    query_seq_info = None
+                    for seq_id, seq, annotation in seq_io.read_fasta_seq(query_proteins, keep_annotation=True):
+                        if seq_id == query:
+                            if query_seq_info is not None:
+                                raise Exception("Unexpectedly found >1 sequence of query with ID {}".format(query))
+                            query_seq_info = (seq_id, seq, annotation)
+                    if query_seq_info is None:
+                        raise Exception("Unexpectedly did not find query ID {} in query fasta file".format(query))
+                    with open(fasta, "a") as f:
+                        f.write(">{} {}\n{}\n".format(query_seq_info[0], query_seq_info[2], query_seq_info[1]))
+                else:
+                    logging.debug("Not creating an ortholog file for {} since there were no orthologs", query)
+
+
+
+
+            
+            
+            # Find the sequences that are in all lists
+            # Output a FASTA file for that group, plus the query sequence
 
         # TODO: In parallel MSA and tree making?
+        # TODO: Add multiple alignment, tree building, etc.
+        # If there are >= 4 sequences, then add it to the list for tree building
         # Run MSA workflow
         # Run tree making software
         # Make Arb DB
@@ -344,3 +392,18 @@ class OrthologueWorkflow():
                                  metadata,
                                  gene_precontext, gene_postcontext,
                                  arb_metadata_file)
+
+    def _blast_result_to_dictionary(self, blast_object, blast_output):
+        # Assumes format is custom, as used above. Return a dictionary of query
+        # to list of BlastHitCustom. Only take the first hit from each query/hit
+        # pair.
+
+        query_to_hits = {}
+        for res in blast_object.read_hit(blast_output, 'custom'):
+            query = res.query_id
+            if query not in query_to_hits:
+                query_to_hits[query] = []
+            
+            if len(query_to_hits[query]) == 0 or query_to_hits[query][-1].subject_id != res.subject_id:
+                query_to_hits[query].append(res)
+        return query_to_hits
