@@ -43,7 +43,7 @@ from numpy import (percentile as np_percentile,
                     mean as np_mean)
 
 import dendropy
-
+import extern
 
 class OrthologueWorkflow():
     """Blast-based workflow for building gene trees after finding orthologues."""
@@ -172,6 +172,10 @@ class OrthologueWorkflow():
 
         # Split up blast hits into [{query_id->[hits]}] structure
         query_to_hits = self._blast_result_to_dictionary(blast, blast_output)
+        homologs = set()
+        for hits in query_to_hits.values():
+            for hit in hits:
+                homologs.add(hit.subject_id)
         self.logger.info('Identified %d homologs in reference database.' % len(homologs))
 
         if len(query_to_hits) == 0:
@@ -179,9 +183,9 @@ class OrthologueWorkflow():
             sys.exit(1)
 
         # extract homologs
-        self.logger.info('Extracting homologs and determining local gene context.')
+        self.logger.info('Extracting homologs from db ..')
         db_homologs_tmp = os.path.join(output_dir, 'homologs_db.tmp')
-        gene_precontext, gene_postcontext = extract_homologs_and_context(set(homologs.keys()), db_file, db_homologs_tmp)
+        self._extract_sequences(homologs, db_file, db_homologs_tmp)
 
         # report gene length distribution of homologs
         mean_len, max_len, min_len, p10, p50, p90 = gene_distribution(db_homologs_tmp)
@@ -199,8 +203,8 @@ class OrthologueWorkflow():
 
         # BLAST all the top query sequences against the DB itself
         db_top_homologs_tmp = os.path.join(output_dir, 'top_homologs_db.tmp')
-        tophit_blast_output = os.path.join(output_dir, 'tophit_hits.tsv')
-        if homology_search == 'diamond':
+        extract_homologs_and_context(top5_hit_ids, db_homologs_tmp, db_top_homologs_tmp)
+        self.logger.info("BLASTing top homologues against DB ..")
         tophit_blast_output = os.path.join(output_dir, 'tophit_hits.tsv')
         if homology_search == 'diamond':
             diamond = Diamond(self.cpus)
@@ -407,3 +411,8 @@ class OrthologueWorkflow():
             if len(query_to_hits[query]) == 0 or query_to_hits[query][-1].subject_id != res.subject_id:
                 query_to_hits[query].append(res)
         return query_to_hits
+
+    def _extract_sequences(sequence_ids, db_file, output_file):
+        extern.run("mfqe --fasta-read-name-lists \/dev/stdin --input-fasta '{}' --output-fasta-files '{}' --output-uncompressed".format(
+            db_file, output_file),
+            stdin="\n".join(sequence_ids))
