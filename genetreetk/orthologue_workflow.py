@@ -240,7 +240,11 @@ class OrthologueWorkflow():
             num_top_hits_with_backblast = 0
             for top_hit_res in top_hits:
                 top_hit_name = top_hit_res.subject_id
-                backblast_hits_here = backblast_to_hits[top_hit_name]
+                try:
+                    backblast_hits_here = backblast_to_hits[top_hit_name]
+                except KeyError:
+                    # This top hit did not backblast, so do not record it
+                    continue
                 # Minimum bitscore is the 500th highest bitscore, or 0 if the number of homologs identified is <500.
                 next_homologs_here = top_hits_to_hits[top_hit_name]
                 if len(next_homologs_here) == 500: #TODO: Remove hardcode
@@ -266,7 +270,7 @@ class OrthologueWorkflow():
                 ))
                 if len(intersection_set) > 0:
                     fasta = os.path.join(ortholog_fasta_folder, "{}.orthologs.faa".format(query))
-                    extract_homologs_and_context(intersection_set, db_homologs_tmp, fasta)
+                    _extract_sequences(intersection_set, db_homologs_tmp, fasta)
                     query_seq_info = None
                     for seq_id, seq, annotation in seq_io.read_fasta_seq(query_proteins, keep_annotation=True):
                         if seq_id == query:
@@ -412,7 +416,7 @@ class OrthologueWorkflow():
                 query_to_hits[query].append(res)
         return query_to_hits
 
-    def _extract_sequences(sequence_ids, db_file, output_file):
+    def _extract_sequences(self, sequence_ids, db_file, output_file):
         extern.run("mfqe --fasta-read-name-lists \/dev/stdin --input-fasta '{}' --output-fasta-files '{}' --output-uncompressed".format(
             db_file, output_file),
             stdin="\n".join(sequence_ids))
