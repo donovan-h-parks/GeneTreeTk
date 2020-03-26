@@ -64,6 +64,7 @@ def print_help():
   Database utilities:
     prokka    -> Run Prokka across multiple genome bins
     create_db -> Create dereplicated GeneTreeTk-compatible database
+    arb_db    -> Create an ARB DB from a list of protein sequences
     
   Compare trees:
     robinson_foulds  -> Calculate Robinson-Foulds distance between trees
@@ -284,6 +285,20 @@ if __name__ == '__main__':
     optonal_args.add_argument('--cpus', type=int, default=1, help='number of cpus to use')
     optonal_args.add_argument('--silent', help="suppress output", action='store_true')
     optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
+    arb_db_parser = subparsers.add_parser('arb_db',
+                                        add_help=False,
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Create an ARB-compatible database of sequences.')
+    req_args = arb_db_parser.add_argument_group('required arguments')
+    req_args.add_argument('-a', '--alignment_file', help='MSA of proteins to be included in the database', required=True)
+    req_args.add_argument('-d', '--db_file', help='BLAST database of reference proteins', required=True)
+    req_args.add_argument('-t', '--taxonomy_file', help='taxonomic assignment of each reference genomes', required=True)
+    req_args.add_argument('-o', '--output_file', help='output file', required=True)
+    optonal_args = arb_db_parser.add_argument_group('optional arguments')
+    optonal_args.add_argument('--silent', help="suppress output", action='store_true')
+    optonal_args.add_argument('-h', '--help', action="help", help="show help message")
+
     
     # calculate Robinson-Foulds distance between trees
     robinson_foulds_parser = subparsers.add_parser('robinson_foulds',

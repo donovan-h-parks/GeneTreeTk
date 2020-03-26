@@ -33,7 +33,7 @@ from genetreetk.prokka import Prokka
 from genetreetk.create_database import CreateDatabase
 from genetreetk.tree_compare import TreeCompare
 from genetreetk.orthologue_workflow import OrthologueWorkflow
-
+from genetreetk.arb_db_creator import ArbDbCreator
 
 class OptionsParser():
     def __init__(self):
@@ -159,6 +159,13 @@ class OptionsParser():
                          options.keep_all_genes,
                          options.no_reformat_gene_ids,
                          options.output_dir)
+
+    def create_arb_db(self, options):
+        ArbDbCreator().create_from_protein_alignment(
+            alignment_file=options.alignment_file,
+            db_file=options.db_file,
+            taxonomy_file=options.taxonomy_file,
+            output_file=options.output_file)
                          
     def robinson_foulds(self, options):
         """Compare unrooted trees using common statistics."""
@@ -276,6 +283,8 @@ class OptionsParser():
             self.prokka(options)
         elif options.subparser_name == 'create_db':
             self.create_db(options)
+        elif options.subparser_name == 'arb_db':
+            self.create_arb_db(options)
         elif options.subparser_name == 'robinson_foulds':
             self.robinson_foulds(options)   
         elif options.subparser_name == 'supported_splits':

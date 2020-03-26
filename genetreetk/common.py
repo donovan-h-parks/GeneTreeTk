@@ -31,6 +31,7 @@ import biolib.seq_io as seq_io
 
 from numpy import (percentile as np_percentile,
                     mean as np_mean)
+import extern
 
 from genetreetk.arb_parser import ArbParser
 
@@ -270,3 +271,8 @@ def remove_stop_codons(input_file, output_file):
             seq = seq[0:-1]
         fout.write('%s\n' % seq)
     fout.close()
+
+def extract_sequences(self, sequence_ids, db_file, output_file):
+    extern.run("mfqe --fasta-read-name-lists \/dev/stdin --input-fasta '{}' --output-fasta-files '{}' --output-uncompressed".format(
+        db_file, output_file),
+        stdin="\n".join(sequence_ids))
