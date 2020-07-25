@@ -117,7 +117,6 @@ class ArbDbCreator():
     # req_args.add_argument('-t', '--taxonomy_file', help='taxonomic assignment of each reference genomes', required=True)
     # req_args.add_argument('-o', '--output_file', help='output file', required=True)
         alignment_file = kwargs.pop('alignment_file')
-        db_file = kwargs.pop('db_file')
         taxonomy_file = kwargs.pop('taxonomy_file')
         output_file = kwargs.pop('output_file')
         if len(kwargs) > 0:

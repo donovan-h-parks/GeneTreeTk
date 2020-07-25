@@ -163,7 +163,6 @@ class OptionsParser():
     def create_arb_db(self, options):
         ArbDbCreator().create_from_protein_alignment(
             alignment_file=options.alignment_file,
-            db_file=options.db_file,
             taxonomy_file=options.taxonomy_file,
             output_file=options.output_file)
                          
