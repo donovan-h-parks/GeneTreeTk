@@ -32,7 +32,8 @@ from genetreetk.prune import Prune
 from genetreetk.prokka import Prokka
 from genetreetk.create_database import CreateDatabase
 from genetreetk.tree_compare import TreeCompare
-
+from genetreetk.orthologue_workflow import OrthologueWorkflow
+from genetreetk.arb_db_creator import ArbDbCreator
 
 class OptionsParser():
     def __init__(self):
@@ -158,6 +159,12 @@ class OptionsParser():
                          options.keep_all_genes,
                          options.no_reformat_gene_ids,
                          options.output_dir)
+
+    def create_arb_db(self, options):
+        ArbDbCreator().create_from_protein_alignment(
+            alignment_file=options.alignment_file,
+            taxonomy_file=options.taxonomy_file,
+            output_file=options.output_file)
                          
     def robinson_foulds(self, options):
         """Compare unrooted trees using common statistics."""
@@ -170,13 +177,13 @@ class OptionsParser():
             wrf = tc.weighted_robinson_foulds(options.tree1, 
                                                 options.tree2,
                                                 options.taxa_list)
-            print 'Weighted Robinson-Foulds: %.3f' % wrf
+            print(('Weighted Robinson-Foulds: %.3f' % wrf))
         else:
             rf, normalized_rf = tc.robinson_foulds(options.tree1, 
                                                     options.tree2,
                                                     options.taxa_list)
-            print 'Robinson-Foulds: %d' % rf
-            print 'Normalized Robinson-Foulds: %.3f' % normalized_rf
+            print(('Robinson-Foulds: %d' % rf))
+            print(('Normalized Robinson-Foulds: %.3f' % normalized_rf))
                          
     def supported_splits(self, options):
         """Supported bipartitions of common taxa shared between two trees."""
@@ -219,6 +226,42 @@ class OptionsParser():
                             suppress_rooting=True, 
                             unquoted_underscores=True)
 
+    def orthologue(self, options):
+        """Infer gene tree using BLAST after Orthologue clustering."""
+        
+        check_file_exists(options.query_proteins)
+        check_file_exists(options.db_file)
+        check_file_exists(options.taxonomy_file)
+
+        # sanity check arguments
+        if options.prot_model == 'AUTO' and options.tree_program != 'raxml':
+            self.logger.error("The 'AUTO' protein model can only be used with RAxML.")
+            sys.exit(-1)
+
+        workflow = OrthologueWorkflow(options.cpus)
+        workflow.run(
+            query_proteins=options.query_proteins,
+            db_file=options.db_file,
+            #custom_db_file=options.custom_db_file,
+            taxonomy_file=options.taxonomy_file,
+            #custom_taxonomy_file=options.custom_taxonomy_file,
+            evalue=options.evalue,
+            per_identity=options.per_identity,
+            per_aln_len=options.per_aln_len,
+            max_matches=options.max_matches,
+            homology_search=options.homology_search,
+            min_per_taxa=options.min_per_taxa,
+            consensus=options.consensus,
+            min_per_bp=options.min_per_bp,
+            use_trimAl=options.use_trimAl,
+            restrict_taxon=options.restrict_taxon,
+            msa_program=options.msa_program,
+            tree_program=options.tree_program,
+            prot_model=options.prot_model,
+            skip_rooting=options.skip_rooting,
+            output_dir=options.output_dir)
+
+
 
     def parse_options(self, options):
         """Parse user options and call the correct pipeline(s)"""
@@ -227,6 +270,8 @@ class OptionsParser():
             self.blast(options)
         elif options.subparser_name == 'concat':
             self.concat(options)
+        elif options.subparser_name == 'orthologue':
+            self.orthologue(options)
         elif options.subparser_name == 'reduce':
             self.reduce(options)
         elif options.subparser_name == 'bootstrap':
@@ -237,6 +282,8 @@ class OptionsParser():
             self.prokka(options)
         elif options.subparser_name == 'create_db':
             self.create_db(options)
+        elif options.subparser_name == 'arb_db':
+            self.create_arb_db(options)
         elif options.subparser_name == 'robinson_foulds':
             self.robinson_foulds(options)   
         elif options.subparser_name == 'supported_splits':

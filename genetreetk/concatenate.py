@@ -88,7 +88,7 @@ class Concatenate():
             arb_metadata['gtdb_tax_string'] = ';'.join(taxonomy.get(seq_id, ''))
             arb_metadata['aligned_seq'] = seq
 
-            for k, v in metadata.iteritems():
+            for k, v in metadata.items():
                 arb_metadata[k] = v
 
             arb_metadata_list.append(arb_metadata)
@@ -213,7 +213,7 @@ class Concatenate():
         for gene_id in gene_dirs:
             taxonomy_file = os.path.join(gene_id, 'taxonomy.tsv')
             t = Taxonomy().read(taxonomy_file)
-            for label, taxa_str in t.iteritems():
+            for label, taxa_str in t.items():
                 taxon_id, gene_id = self._split_ids(label, split_chars)
                 taxonomy[taxon_id] = taxa_str
         

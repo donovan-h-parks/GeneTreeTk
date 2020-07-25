@@ -35,8 +35,7 @@ from biolib.external.blast import Blast
 from biolib.external.diamond import Diamond
 from biolib.external.execute import check_dependencies
 
-from genetreetk.arb_parser import ArbParser
-from genetreetk.common import validate_seq_ids
+from genetreetk.common import validate_seq_ids, extract_homologs_and_context, create_arb_metadata, remove_stop_codons, gene_distribution
 from genetreetk.msa_workflow import MsaWorkflow
 from genetreetk.tree_workflow import TreeWorkflow
 
@@ -70,226 +69,6 @@ class BlastWorkflow():
         self.logger = logging.getLogger('timestamp')
 
         self.cpus = cpus
-
-    def extract_homologs_and_context(self, homologs, db_file, output_file):
-        """Extract homologs sequences from database file, and local gene context.
-
-        This function extract sequences information for each
-        homolog and writes this to file for downstream processing.
-        In addition, it determines the local gene context for each
-        gene. Specifically, it saves the annotations for the
-        3 genes prior to and after a given gene.
-
-        This function assumes the database is sorted according
-        to the order genes are identified on each contig.
-
-        Parameters
-        ----------
-        homologs : iterable
-            Unique identifiers of sequences to extract
-        db_file : str
-            Fasta file with sequences.
-        output_file : str
-            File to write homologs.
-
-        Returns
-        -------
-        dict
-            d[seq_id] -> list of annotations for pre-context genes
-        dict
-            d[seq_id] -> list of annotations for post-context genes
-        """
-
-        gene_precontext = {}
-        gene_postcontext = {}
-
-        if len(homologs) == 0:
-            return gene_precontext, gene_postcontext
-
-        if type(homologs) is not set:
-            homologs = set(homologs)
-
-        fout = open(output_file, 'w')
-        local_context = [('unknown~unknown_x', None)] * 3
-        post_context_counter = {}
-        for seq_id, seq, annotation in seq_io.read_fasta_seq(db_file, keep_annotation=True):
-            if seq_id in homologs:
-                fout.write('>' + seq_id + ' ' + annotation + '\n')
-                fout.write(seq + '\n')
-
-                gene_precontext[seq_id] = list(local_context)
-                post_context_counter[seq_id] = 3
-
-            # record 3 precontext genes
-            local_context[0] = local_context[1]
-            local_context[1] = local_context[2]
-            local_context[2] = (seq_id, annotation)
-
-            # record 3 postcontext genes
-            if len(post_context_counter):
-                key_to_remove = None
-                for seq_id, count in post_context_counter.iteritems():
-                    count -= 1
-                    if count == -1:
-                        gene_postcontext[seq_id] = list(local_context)
-                        key_to_remove = seq_id
-                    else:
-                        post_context_counter[seq_id] = count
-
-                if key_to_remove:
-                    post_context_counter.pop(key_to_remove)
-
-        fout.close()
-
-        # filter gene context to contain only genes on the same scaffold
-        gene_precontext = self._filter_gene_context(gene_precontext)
-        gene_postcontext = self._filter_gene_context(gene_postcontext)
-
-        return gene_precontext, gene_postcontext
-
-    def _filter_gene_context(self, gene_context):
-        """Filter gene context to contain only genes on the same scaffold.
-
-        This function assumes sequence identifies have the following format:
-            <genome_id>~<scaffold_id>_<gene_#> [gtdb_taxonomy] [NCBI organism name] [annotation]
-
-        Parameters
-        ----------
-        gene_context : d[seq_id] -> [(seq_id, annotation), ..., (seq_id, annotation)]
-            Gene context.
-
-        Returns
-        -------
-        dict: d[seq_id] -> [annotation, ..., annotation]
-            Filtered to contain only annotations from the same scaffold.
-        """
-
-        filtered_gene_context = {}
-        for seq_id, context in gene_context.iteritems():
-            _genome_id, gene_id = seq_id.split('~')
-            scaffold_id = gene_id[0:gene_id.rfind('_')]
-
-            filtered_context = []
-            for local_seq_id, annotation in context:
-                _local_genome_id, local_gene_id = local_seq_id.split('~')
-                local_scaffold_id = local_gene_id[0:local_gene_id.rfind('_')]
-
-                # strip organism name and IMG gene id
-                annotation = annotation[0:annotation.rfind('[')]
-                annotation = annotation[0:annotation.rfind('[')].strip()
-
-                if scaffold_id == local_scaffold_id:
-                    filtered_context.append(annotation)
-
-            filtered_gene_context[seq_id] = filtered_context
-
-        return filtered_gene_context
-
-    def create_arb_metadata(self,
-                            homologs, 
-                            msa_output, 
-                            taxonomy,
-                            metadata,
-                            gene_precontext, 
-                            gene_postcontext,
-                            output_file):
-        """Create metadata file suitable for import into ARB.
-
-        Parameters
-        ----------
-        homologs : d[seq_id] -> namedtuple of BlastHit information
-            BLAST results for identified homologs.
-        msa_output : str
-            Fasta file with aligned homologs.
-        taxonomy : d[genome_id] -> list of taxa
-            Taxonomic information for genomes.
-        metadata : d[key] - string
-            Additional metadata to write to ARB file.
-        gene_precontext : d[seq_id] -> list of annotations for pre-context genes
-            Annotation for genes preceding a gene.
-        gene_postcontext: d[seq_id] -> list of annotations for post-context genes
-            Annotation for genes following a gene.
-        output_file : str
-            File to write metadata information.
-        """
-
-        arb_metadata_list = []
-        for seq_id, seq, annotation in seq_io.read_seq(msa_output, keep_annotation=True):
-            if '~' in seq_id:
-                genome_id, scaffold_gene_id = seq_id.split('~')
-            else:
-                scaffold_gene_id = seq_id
-                genome_id = ''
-
-            arb_metadata = {}
-            arb_metadata['db_name'] = seq_id
-            arb_metadata['genome_id'] = genome_id
-            arb_metadata['scaffold_id'] = scaffold_gene_id[0:scaffold_gene_id.rfind('_')]
-            arb_metadata['scaffold_gene_id'] = scaffold_gene_id
-            arb_metadata['gtdb_tax_string'] = ';'.join(taxonomy.get(genome_id, ''))
-            arb_metadata['aligned_seq'] = seq
-
-            for k, v in metadata.iteritems():
-                arb_metadata[k] = v
-
-            arb_metadata['gene_precontext'] = ' -> '.join(gene_precontext.get(seq_id, []))
-            arb_metadata['gene_postcontext'] = ' <- '.join(gene_postcontext.get(seq_id, []))
-
-            hit_info = homologs.get(seq_id, None)
-            if hit_info:
-                arb_metadata['blast_evalue'] = '%.1g' % hit_info.evalue
-                arb_metadata['blast_bitscore'] = '%.1f' % hit_info.bitscore
-                arb_metadata['blast_perc_identity'] = '%.1f' % hit_info.perc_identity
-                arb_metadata['blast_subject_perc_alignment_len'] = '%.1f' % hit_info.subject_perc_aln_len
-                arb_metadata['blast_query_perc_alignment_len'] = '%.1f' % hit_info.query_perc_aln_len
-                arb_metadata['blast_query_id'] = hit_info.query_id
-
-            if annotation:
-                annotation_split = annotation.split('] [')
-                if len(annotation_split) == 3:
-                    # assume format is [gtdb_taxonomy] [NCBI organism name] [annotation]
-                    gtdb_taxonomy, organism_name, gene_annotation = annotation_split
-                    gtdb_taxonomy = gtdb_taxonomy.replace('[', '')
-                    gene_annotation = gene_annotation.replace(']', '')
-                else:
-                    # no idea what the format is, so just save the annotation
-                    gene_annotation = annotation
-                    organism_name = ''
-                    gtdb_taxonomy = ''
-
-                arb_metadata['gene_annotation'] = gene_annotation
-                arb_metadata['organism'] = organism_name
-                arb_metadata['full_name'] = organism_name
-
-            arb_metadata_list.append(arb_metadata)
-
-        fout = open(output_file, 'w')
-        arb_parser = ArbParser()
-        arb_parser.write(arb_metadata_list, fout)
-        fout.close()
-        
-    def _gene_distribution(self, seq_file):
-        """Calculate length distribution of sequences."""
-        
-        gene_lens = []
-        for seq_id, seq in seq_io.read_seq(seq_file):
-            gene_lens.append(len(seq))
-            
-        p10, p50, p90 = np_percentile(gene_lens, [10, 50, 90])
-        
-        return np_mean(gene_lens), max(gene_lens), min(gene_lens), p10, p50, p90
-        
-    def _remove_stop_codons(self, input_file, output_file):
-        """Remove stop codons at end of sequences."""
-        
-        fout = open(output_file, 'w')
-        for seq_id, seq, annotation in seq_io.read_seq(input_file, keep_annotation=True):
-            fout.write('>%s %s\n' % (seq_id, annotation))
-            
-            if seq[-1] == '*':
-                seq = seq[0:-1]
-            fout.write('%s\n' % seq)
-        fout.close()
 
     def run(self, query_proteins,
             db_file, custom_db_file,
@@ -394,7 +173,7 @@ class BlastWorkflow():
         if restrict_taxon:
             self.logger.info('Restricting homologs to %s.' % restrict_taxon)
             restricted_homologs = {}
-            for query_id, hit in homologs.iteritems():
+            for query_id, hit in homologs.items():
                 genome_id = hit.subject_id.split('~')[0]
                 if restrict_taxon in taxonomy[genome_id]:
                     restricted_homologs[query_id] = hit
@@ -409,10 +188,10 @@ class BlastWorkflow():
         # extract homologs
         self.logger.info('Extracting homologs and determining local gene context.')
         db_homologs_tmp = os.path.join(output_dir, 'homologs_db.tmp')
-        gene_precontext, gene_postcontext = self.extract_homologs_and_context(homologs.keys(), db_file, db_homologs_tmp)
+        gene_precontext, gene_postcontext = extract_homologs_and_context(homologs.keys(), db_file, db_homologs_tmp)
 
         # report gene length distribution of homologs
-        mean_len, max_len, min_len, p10, p50, p90 = self._gene_distribution(db_homologs_tmp)
+        mean_len, max_len, min_len, p10, p50, p90 = gene_distribution(db_homologs_tmp)
         self.logger.info('Homolog gene lengths: min, mean, max = %d, %.1f, %d | p10, p50, p90 = %.1f, %.1f, %.1f' % (
                                                                                         min_len, mean_len, max_len, 
                                                                                         p10, p50, p90))
